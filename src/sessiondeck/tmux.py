@@ -60,7 +60,9 @@ class TmuxRuntime:
             self.command("bind-key", "d", "if-shell", "-F", f"#{{==:#{{pane_id}},{dashboard}}}",
                          "detach-client", f"select-window -t {panes[dashboard].window_id}")
             self.command("bind-key", "-n", "C-q", "detach-client")
-            self.command("set-option", "-g", "status-right", "Ctrl-b d: back / detach")
+            self.command("bind-key", "-n", "C-Space", "if-shell", "-F", f"#{{==:#{{pane_id}},{dashboard}}}",
+                         "detach-client", f"select-window -t {panes[dashboard].window_id}")
+            self.command("set-option", "-g", "status-right", "Ctrl-Space: back / detach")
             pane = self.panes()[dashboard]
             return RuntimeIdentity(pane.socket_path, pane.generation, pane.session_id, dashboard)
 

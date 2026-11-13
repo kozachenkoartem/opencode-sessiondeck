@@ -96,7 +96,7 @@ class SessionDeckApp(App):
                 with Horizontal(id="decisions"):
                     yield Button("Allow once", id="allow", disabled=True)
                     yield Button("Deny", id="deny", disabled=True)
-        yield Label("Ctrl-b d: agent → list; list → detach. Ctrl-q: detach. Agents keep running.", id="hint")
+        yield Label("Ctrl-Space: agent → list; list → detach. Ctrl-q: detach. Agents keep running.", id="hint")
         yield Footer()
 
     def on_mount(self):

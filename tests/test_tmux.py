@@ -47,6 +47,7 @@ def test_unified_detach_binding(runtime):
     assert "select-window" in binding
     assert identity.dashboard_pane_id in binding
     assert "C-q" in runtime.command("list-keys", "-T", "root").stdout
+    assert "C-Space" in runtime.command("list-keys", "-T", "root").stdout
 
 
 def test_missing_pane(runtime, tmp_path):
