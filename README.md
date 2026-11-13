@@ -41,8 +41,9 @@ sessiondeck
 not send a prompt; select the session in the dashboard and enter your message
 in OpenCode. A project appears after its first session is registered.
 
-**One key sequence: `Ctrl-b`, then `d`.** From an agent it returns to the list;
-from the list it detaches your terminal. The agents keep working in both cases.
+**Layout-independent shortcut: `Ctrl+Space`.** From an agent it returns to the
+list; from the list it detaches your terminal. The agents keep working in both
+cases. `Ctrl-b`, then `d` remains available as an alternative.
 Run `sessiondeck` again from another SSH terminal, including your phone.
 
 The dedicated socket is `opencode-sessiondeck`; your regular tmux server is
@@ -70,19 +71,22 @@ restores the saved conversation, not an in-flight model request or tool process.
 | `r` | Refresh |
 | `R` | Retry automatic recovery |
 | `N` | Create a named session; browse a directory from the project list |
+| `C` | Continue a saved OpenCode session in the selected directory |
 | `X` | Unload a completed task without deleting its OpenCode history |
+| `g` | Toggle grouped and flat session lists |
 | `h` | Show/hide completed sessions |
 | `c` | Archive completed records in the current workspace/directory view |
-| `Ctrl-b d` | Agent → dashboard; dashboard → detach |
+| `Ctrl+Space` | Agent → dashboard; dashboard → detach |
+| `Ctrl+Q` | Detach the current terminal |
+| `Ctrl-b d` | Alternative: agent → dashboard; dashboard → detach |
 
-`d` alone is a permission decision; `Ctrl-b d` is handled by tmux. Questions
-are visible in the dashboard but answered inside OpenCode. At narrow widths,
-the table and details stack vertically and can be scrolled.
+`d` alone is a permission decision; `Ctrl+Space`, `Ctrl+Q`, and `Ctrl-b d`
+are handled by tmux. Questions are visible in the dashboard but answered inside
+OpenCode. At narrow widths, the table and details stack vertically and can be
+scrolled.
 
 Cleanup rechecks that a session is completed; working and temporarily
-unreachable agents are retained. To reload an already-running dashboard after
-a local update, press `Ctrl+Q` in the dashboard and run `sessiondeck` again.
-Only the panel exits; agent windows keep running.
+unreachable agents are retained.
 
 ## Integrate your launcher
 
