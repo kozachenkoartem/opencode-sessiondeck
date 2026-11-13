@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opencode-sessiondeck"
+version = "0.1.0"
+description = "SSH-friendly terminal dashboard for OpenCode sessions in tmux"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["httpx==0.28.1", "textual==6.12.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "pytest-asyncio>=1,<2"]
+
+[project.scripts]
+sessiondeck = "sessiondeck.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sessiondeck"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/docs/*.md"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = ["live: isolated real OpenCode tests (enable with --live)"]
