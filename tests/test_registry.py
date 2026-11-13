@@ -127,3 +127,42 @@ def test_obsolete_binding_requires_matching_fingerprint(registry, tmp_path):
         registry.register(replace(second, endpoint=reg.endpoint), current,
                           obsolete_bindings={old.deck_id: replace(old.binding, generation="wrong")})
     assert error.value.code == "binding_conflict"
+
+
+def test_claim_is_revoked_by_explicit_unload(registry, tmp_path):
+    session = registry.register(*binding(tmp_path), native_runner=True)
+    claim = registry.claim_start(session.deck_id)
+    group = registry.begin_unload(session.deck_id, (session.deck_id,))
+    assert group.deck_ids == (session.deck_id,)
+    assert not registry.validate_claim(claim)
+    assert not registry.get(session.deck_id).restore_on_start
+
+
+def test_unload_rejects_membership_that_changed_since_confirmation(registry, tmp_path):
+    first = registry.register(*binding(tmp_path), native_runner=True)
+    second = registry.register(replace(first.registration, opencode_session_id="ses_shared"),
+                               VerifiedBinding(first.binding, replace(
+                                   binding(tmp_path, 2)[1].conversation,
+                                   id="ses_shared", directory=first.registration.directory)),
+                               native_runner=True)
+    with pytest.raises(DeckError, match="membership changed"):
+        registry.begin_unload(first.deck_id, (first.deck_id,))
+    assert registry.get(first.deck_id).restore_on_start
+    assert registry.get(second.deck_id).restore_on_start
+
+
+def test_external_registration_is_not_recoverable(registry, tmp_path):
+    session = registry.register(*binding(tmp_path))
+    assert not session.native_runner
+    assert not session.restore_on_start
+
+
+def test_rebind_preserves_logical_session_identity(registry, tmp_path):
+    reg, verified = binding(tmp_path)
+    original = registry.register(reg, verified, native_runner=True)
+    pane = replace(verified.pane, pane_id="%9", generation="replacement")
+    replacement = registry.register(replace(reg, endpoint="http://127.0.0.1:19000", tmux_pane_id=pane.pane_id,
+                                            tmux_generation=pane.generation),
+                                    replace(verified, pane=pane), native_runner=True, rebind_deck_id=original.deck_id)
+    assert replacement.deck_id == original.deck_id
+    assert replacement.binding == pane

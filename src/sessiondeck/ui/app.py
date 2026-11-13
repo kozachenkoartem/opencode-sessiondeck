@@ -1,6 +1,8 @@
+import asyncio
 import re
 import json
 import time
+from pathlib import Path
 
 from rich.text import Text
 from textual import work
@@ -10,10 +12,21 @@ from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 
 from ..models import DashboardSnapshot, DeckError
 from ..monitor import Monitor
+from ..runner import start_session
+from ..history import list_sessions
+from .dialogs import ContinueSessionScreen, CreateSessionScreen, DirectoryScreen, UnloadScreen
 
 
 def plain(value) -> str:
     return re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", str(value))
+
+
+def short_path(value) -> str:
+    path, home = Path(value), Path.home()
+    try:
+        return "~" if path == home else "~/" + str(path.relative_to(home))
+    except ValueError:
+        return str(path)
 
 
 def age(timestamp: float) -> str:
@@ -49,7 +62,8 @@ class SessionDeckApp(App):
                 ("3", "workspace('all')", "All"), ("escape", "back", "Back"),
                 ("backspace", "back", "Back"), ("a", "approve", "Allow once"),
                 ("d", "deny", "Deny"), ("n", "next_request", "Next request"), ("r", "refresh_data", "Refresh"),
-                ("h", "toggle_completed", "Completed"), ("c", "clear_completed", "Clear ended")]
+                 ("h", "toggle_completed", "Completed"), ("c", "clear_completed", "Clear ended"),
+                ("N", "new_session", "New"), ("C", "continue_session", "Continue"), ("X", "unload_session", "Unload"), ("R", "retry_recovery", "Retry recovery"), ("g", "toggle_grouping", "Grouped")]
 
     def __init__(self, registry, monitor, runtime):
         super().__init__()
@@ -64,7 +78,9 @@ class SessionDeckApp(App):
         self.busy_deciding = False
         self.busy_attaching = False
         self.busy_cleaning = False
+        self.continue_directory = None
         self.show_completed = False
+        self.group_by_directory = True
         self.columns_mode = None
 
     def compose(self) -> ComposeResult:
@@ -80,12 +96,22 @@ class SessionDeckApp(App):
                 with Horizontal(id="decisions"):
                     yield Button("Allow once", id="allow", disabled=True)
                     yield Button("Deny", id="deny", disabled=True)
-        yield Label("Ctrl-b d: agent → list; list → detach. Agents keep running.", id="hint")
+        yield Label("Ctrl-b d: agent → list; list → detach. Ctrl-q: detach. Agents keep running.", id="hint")
         yield Footer()
 
     def on_mount(self):
         self.query_one(DataTable).focus()
         self.follow_sessions()
+        self.recover_sessions()
+        self.set_interval(1, self.recover_sessions)
+
+    @work(group="recovery", exit_on_error=False)
+    async def recover_sessions(self):
+        from ..recovery import RecoveryCoordinator
+        restored = await asyncio.to_thread(RecoveryCoordinator(self.registry, self.runtime).recover_pending)
+        if restored:
+            self.notify(f"Restored {len(restored)} session(s)")
+            self.monitor.request_registry_refresh()
 
     def on_resize(self):
         self.set_class(self.size.width < 80, "narrow")
@@ -117,16 +143,16 @@ class SessionDeckApp(App):
         if self.directory_key is not None and not any(
                 (view.session.registration.workspace, view.session.registration.directory) == self.directory_key for view in views):
             self.directory_key = None
-        mode = (self.directory_key is None, narrow)
+        mode = (self.directory_key is None and self.group_by_directory, narrow)
         table.clear(columns=mode != self.columns_mode)
         if mode != self.columns_mode:
             self.columns_mode = mode
-            if self.directory_key is None:
+            if self.directory_key is None and self.group_by_directory:
                 table.add_columns(*(["Project", "Attention"] if narrow else ["Workspace", "Project directory", "Sessions", "Attention"]))
             else:
-                table.add_columns(*(["State · Session"] if narrow else ["Status", "Session", "Activity"]))
+                table.add_columns(*(["State · Session"] if narrow else ["Status", "Session", "Directory", "Activity"]))
         self.row_projects, self.row_sessions = {}, {}
-        if self.directory_key is None:
+        if self.directory_key is None and self.group_by_directory:
             groups = {}
             for view in views:
                 key = (view.session.registration.workspace, view.session.registration.directory)
@@ -135,19 +161,20 @@ class SessionDeckApp(App):
                 key = json.dumps(group)
                 self.row_projects[key] = group
                 attention = sum(needs_attention(v) for v in sessions)
-                label = f"{group[0]} · {group[1]}" if self.workspace == "all" else group[1]
+                label = f"{group[0]} · {short_path(group[1])}" if self.workspace == "all" else short_path(group[1])
                 values = [plain(label), str(attention)] if narrow else [group[0], plain(group[1]), str(len(sessions)), str(attention)]
                 table.add_row(*(Text(v) for v in values), key=key)
             breadcrumb = f"{self.workspace} / projects"
         else:
             for view in sorted(views, key=lambda v: (not needs_attention(v), v.title, v.session.deck_id)):
-                if (view.session.registration.workspace, view.session.registration.directory) != self.directory_key:
+                if self.directory_key is not None and (view.session.registration.workspace, view.session.registration.directory) != self.directory_key:
                     continue
                 key = view.session.deck_id
                 self.row_sessions[key] = view
-                values = [plain(f"{view.status} · {view.title}")] if narrow else [view.status, plain(view.title), age(view.last_activity)]
+                values = [plain(f"{view.status} · {view.title}")] if narrow else [view.status, plain(view.title), short_path(view.session.registration.directory), age(view.last_activity)]
                 table.add_row(*(Text(v) for v in values), key=key)
-            breadcrumb = f"{self.directory_key[0]} / {plain(self.directory_key[1])}"
+            breadcrumb = (f"{self.directory_key[0]} / {short_path(self.directory_key[1])}" if self.directory_key is not None
+                          else f"{self.workspace} / flat")
         if self.show_completed:
             breadcrumb += " · completed shown"
         self.query_one("#breadcrumb", Label).update(Text(breadcrumb))
@@ -205,7 +232,7 @@ class SessionDeckApp(App):
         try:
             await self.monitor.attach(deck_id)
         except DeckError as exc:
-            self.notify(plain(str(exc)), severity="error")
+            self.notify(plain(str(exc)), severity="error", timeout=10)
         finally:
             self.busy_attaching = False
 
@@ -220,8 +247,122 @@ class SessionDeckApp(App):
     def action_refresh_data(self):
         self.monitor.request_registry_refresh()
 
+    def action_new_session(self):
+        directory = self.directory_key[1] if self.directory_key else None
+        workspace = self.directory_key[0] if self.directory_key else (self.workspace if self.workspace != "all" else "work")
+        if directory:
+            self.push_screen(CreateSessionScreen(directory, workspace), self._create_selected)
+        else:
+            self.push_screen(DirectoryScreen(), lambda selected: self._choose_new_directory(selected, workspace))
+
+    def action_continue_session(self):
+        if self.directory_key is None:
+            self.push_screen(DirectoryScreen(), self._choose_continue_directory)
+            return
+        self.choose_session(self.directory_key[1])
+
+    def _choose_continue_directory(self, directory):
+        if directory:
+            self.continue_directory = directory
+            self.choose_session(directory)
+
+    @work(group="continue", exit_on_error=False)
+    async def choose_session(self, directory):
+        try:
+            sessions = await asyncio.to_thread(list_sessions, directory)
+            if not sessions:
+                self.notify("No saved OpenCode sessions in this directory")
+                return
+            self.push_screen(ContinueSessionScreen(sessions), self._continue_selected)
+        except DeckError as exc:
+            self.notify(plain(str(exc)), severity="error", timeout=10)
+
+    def _continue_selected(self, session_id):
+        if not session_id:
+            return
+        for view in self.snapshot.sessions.values():
+            if view.session.registration.opencode_session_id == session_id:
+                try:
+                    self.runtime.inspect(view.session.binding.pane_id, view.session.binding.generation)
+                except DeckError as exc:
+                    if exc.code not in {"pane_missing", "stale_runtime", "runtime_missing"}:
+                        self.notify(plain(str(exc)), severity="error", timeout=10)
+                        return
+                    break
+                self.busy_attaching = True
+                self.attach_session(view.session.deck_id)
+                return
+        self.busy_attaching = True
+        directory = self.directory_key[1] if self.directory_key else self.continue_directory
+        workspace = self.directory_key[0] if self.directory_key else (self.workspace if self.workspace != "all" else "work")
+        self.continue_session(session_id, directory, workspace)
+
+    @work(group="continue-start", exit_on_error=False)
+    async def continue_session(self, session_id, directory, workspace):
+        try:
+            result = await asyncio.to_thread(start_session, self.registry, self.runtime,
+                                             workspace, directory, session_id)
+            await self.monitor.attach(result["deck_id"])
+        except (DeckError, KeyError) as exc:
+            self.notify(plain(str(exc)), severity="error", timeout=10)
+        finally:
+            self.busy_attaching = False
+            self.monitor.request_registry_refresh()
+
+    def _choose_new_directory(self, directory, workspace):
+        if directory:
+            self.push_screen(CreateSessionScreen(directory, workspace), self._create_selected)
+
+    def _create_selected(self, value):
+        if value and not self.busy_attaching:
+            self.busy_attaching = True
+            directory, title, workspace = value
+            self.create_session(directory, title, workspace)
+
+    @work(group="create", exit_on_error=False)
+    async def create_session(self, directory, title, workspace):
+        try:
+            result = await asyncio.to_thread(start_session, self.registry, self.runtime, workspace, directory, None, title or None)
+            await self.monitor.attach(result["deck_id"])
+        except (DeckError, KeyError) as exc:
+            self.notify(plain(str(exc)), severity="error", timeout=10)
+        finally:
+            self.busy_attaching = False
+            self.monitor.request_registry_refresh()
+
+    def action_retry_recovery(self):
+        self.registry.request_recovery()
+        self.recover_sessions()
+
+    def action_unload_session(self):
+        view = self.row_sessions.get(self.current_key())
+        if not view or not view.session.native_runner:
+            self.notify("Select a native session to unload", severity="error", timeout=10)
+            return
+        members = self.registry.binding_members(view.session.deck_id)
+        self.push_screen(UnloadScreen(len(members)), lambda confirmed: self._unload_confirmed(view.session.deck_id, members) if confirmed else None)
+
+    def _unload_confirmed(self, deck_id, members):
+        self.unload_session(deck_id, members)
+
+    @work(group="unload", exit_on_error=False)
+    async def unload_session(self, deck_id, members):
+        try:
+            group = await asyncio.to_thread(self.registry.begin_unload, deck_id, members)
+            await asyncio.to_thread(self.runtime.close_agent_binding, group.binding)
+            self.notify(f"Unloaded {len(group.deck_ids)} session(s)")
+        except DeckError as exc:
+            self.notify(plain(str(exc)), severity="error", timeout=10)
+        finally:
+            self.monitor.request_registry_refresh()
+
     def action_toggle_completed(self):
         self.show_completed = not self.show_completed
+        self.render_rows()
+
+    def action_toggle_grouping(self):
+        self.group_by_directory = not self.group_by_directory
+        self.directory_key = None
         self.render_rows()
 
     def action_clear_completed(self):
@@ -244,7 +385,7 @@ class SessionDeckApp(App):
             count = await self.monitor.archive_completed(deck_ids)
             self.notify(f"Archived {count} completed session(s)")
         except DeckError as exc:
-            self.notify(plain(str(exc)), severity="error")
+            self.notify(plain(str(exc)), severity="error", timeout=10)
         finally:
             self.busy_cleaning = False
 

@@ -13,8 +13,9 @@ original directory from OpenCode's session metadata. `--directory` remains
 required for a new conversation and can also be supplied explicitly on resume.
 The historical conversation ID must belong to the selected directory.
 Provider, model, plugins and other behavior use normal OpenCode configuration.
-Dashboard launch/directory browsing is deferred; choose a directory in your
-shell or use an external launcher with API v1.
+From the dashboard, press `N` in a selected project to create a named session.
+At the project list, `N` opens a directory browser for a new project. The
+creation dialog accepts an optional title and a `work` or `personal` workspace.
 
 `start` returns a JSON launch summary with `id`, `state`, and, when ready,
 `deck_id`. If startup takes more than 30 seconds, it reports `starting` rather
@@ -66,6 +67,11 @@ SSH. To detach in one shell command, use `tmux -L opencode-sessiondeck detach-cl
 Several clients attached to the same `main` tmux session share window selection.
 Independent simultaneous phone/desktop views are not implemented in v1.
 
+Press `X` on a native session when its task is complete. Confirming unload
+stops its SessionDeck runner, keeps its OpenCode history, and excludes it from
+automatic restoration. `c` only archives completed dashboard records; it does
+not mean the session was intentionally unloaded.
+
 ## States and decisions
 
 The normal view shows active sessions. Confirmed completed sessions are hidden
@@ -101,6 +107,11 @@ After an ambiguous permission timeout the result remains unknown; request
 disappearance is not proof that SessionDeck's decision succeeded.
 
 ## Recovery
+
+Opening plain `sessiondeck` after a machine restart queues recovery for native
+sessions that were not explicitly unloaded. Recovery happens in the dashboard
+without delaying navigation. Press `R` to retry a recovery pass after a
+temporary OpenCode, tmux, or filesystem failure.
 
 If only a native TUI crashes, its backend is retained; selecting the session
 recreates the TUI without starting another backend. A successful OpenCode TUI

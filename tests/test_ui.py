@@ -6,7 +6,7 @@ from textual.widgets import DataTable, Static
 from textual import events
 
 from sessiondeck.models import DashboardSnapshot, DecisionResult, SessionView
-from sessiondeck.ui.app import SessionDeckApp, plain
+from sessiondeck.ui.app import SessionDeckApp, plain, short_path
 from tests.test_monitor import monitor_setup, pending
 from tests.test_registry import binding
 
@@ -26,6 +26,11 @@ class StaticMonitor:
 
     def request_registry_refresh(self):
         self.dirty.set()
+
+
+def test_short_path_uses_home_marker(monkeypatch):
+    monkeypatch.setattr("sessiondeck.ui.app.Path.home", lambda: __import__("pathlib").Path("/home/tester"))
+    assert short_path("/home/tester/ptaf") == "~/ptaf"
 
 
 async def test_directory_navigation_and_small_terminal(monitor_setup):

@@ -46,6 +46,7 @@ def test_unified_detach_binding(runtime):
     assert "detach-client" in binding
     assert "select-window" in binding
     assert identity.dashboard_pane_id in binding
+    assert "C-q" in runtime.command("list-keys", "-T", "root").stdout
 
 
 def test_missing_pane(runtime, tmp_path):
@@ -53,3 +54,13 @@ def test_missing_pane(runtime, tmp_path):
     runtime.command("kill-pane", "-t", pane.pane_id)
     with pytest.raises(DeckError, match="no longer exists"):
         runtime.inspect(pane.pane_id, pane.generation)
+
+
+def test_close_agent_binding_rejects_dashboard_and_closes_agent(runtime, tmp_path):
+    dashboard = runtime.ensure()
+    with pytest.raises(DeckError, match="dashboard"):
+        runtime.close_agent_binding(runtime.inspect(dashboard.dashboard_pane_id, dashboard.generation))
+    agent = runtime.new_window(str(tmp_path), [sys.executable, "-c", "import time; time.sleep(300)"])
+    runtime.close_agent_binding(agent)
+    with pytest.raises(DeckError, match="no longer exists"):
+        runtime.inspect(agent.pane_id, agent.generation)

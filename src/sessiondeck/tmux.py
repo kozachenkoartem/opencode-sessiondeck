@@ -59,6 +59,7 @@ class TmuxRuntime:
                 panes = self.panes()
             self.command("bind-key", "d", "if-shell", "-F", f"#{{==:#{{pane_id}},{dashboard}}}",
                          "detach-client", f"select-window -t {panes[dashboard].window_id}")
+            self.command("bind-key", "-n", "C-q", "detach-client")
             self.command("set-option", "-g", "status-right", "Ctrl-b d: back / detach")
             pane = self.panes()[dashboard]
             return RuntimeIdentity(pane.socket_path, pane.generation, pane.session_id, dashboard)
@@ -97,6 +98,15 @@ class TmuxRuntime:
             raise DeckError("binding_mismatch", "Registered pane is no longer attachable", 4)
         self.command("select-window", "-t", current.window_id)
         self.command("select-pane", "-t", current.pane_id)
+
+    def close_agent_binding(self, binding: PaneBinding):
+        current = self.inspect(binding.pane_id, binding.generation)
+        dashboard = self.option("@sessiondeck_dashboard")
+        if current.pane_id == dashboard:
+            raise DeckError("invalid_binding", "Cannot close the dashboard pane", 4)
+        if current.socket_path != binding.socket_path or current.window_id != binding.window_id:
+            raise DeckError("binding_mismatch", "Agent pane no longer owns its registered window", 4)
+        self.command("kill-window", "-t", current.window_id)
 
     def show_dashboard(self):
         identity = self.ensure()

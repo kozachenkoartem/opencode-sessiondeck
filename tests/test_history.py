@@ -73,6 +73,14 @@ def test_start_parser_accepts_id_without_directory():
     assert args.directory is None and args.session == "ses_test"
 
 
+def test_sessions_for_directory_uses_canonical_paths(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    rows = [{"id": "ses_one", "directory": str(project), "title": "One", "updated": 2},
+            {"id": "ses_other", "directory": str(tmp_path), "title": "Other", "updated": 3}]
+    assert history.sessions_for_directory(rows, project) == [{"id": "ses_one", "title": "One", "updated": 2}]
+
+
 @pytest.mark.parametrize("explicit", [False, True])
 def test_start_resolves_only_when_directory_is_omitted(monkeypatch, tmp_path, explicit):
     registry = Registry(State(tmp_path / "state"))

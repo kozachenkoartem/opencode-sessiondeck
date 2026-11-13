@@ -68,6 +68,9 @@ restores the saved conversation, not an in-flight model request or tool process.
 | `a` / `d` | Allow the displayed permission once / deny it |
 | `n` | Show the next pending permission |
 | `r` | Refresh |
+| `R` | Retry automatic recovery |
+| `N` | Create a named session; browse a directory from the project list |
+| `X` | Unload a completed task without deleting its OpenCode history |
 | `h` | Show/hide completed sessions |
 | `c` | Archive completed records in the current workspace/directory view |
 | `Ctrl-b d` | Agent → dashboard; dashboard → detach |

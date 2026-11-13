@@ -10,7 +10,7 @@ from .registry import Registry
 from .tmux import TmuxRuntime
 
 
-async def register_session(registry: Registry, runtime: TmuxRuntime, registration: Registration):
+async def register_session(registry: Registry, runtime: TmuxRuntime, registration: Registration, *, native_runner=False, rebind_deck_id=None):
     if not re.fullmatch(r"ses[A-Za-z0-9_-]+", registration.opencode_session_id):
         raise DeckError("invalid_session", "Invalid OpenCode session ID", 2)
     try:
@@ -35,7 +35,8 @@ async def register_session(registry: Registry, runtime: TmuxRuntime, registratio
                 if record.binding.socket_path == pane.socket_path
                 and (record.binding.generation != pane.generation or record.binding.pane_id not in present)}
     registration = replace(registration, endpoint=normalize_endpoint(registration.endpoint))
-    return registry.register(registration, VerifiedBinding(pane, conversation), obsolete_bindings=obsolete)
+    return registry.register(registration, VerifiedBinding(pane, conversation), native_runner=native_runner, rebind_deck_id=rebind_deck_id,
+                             obsolete_bindings=obsolete)
 
 
 async def register_input(registry: Registry, runtime: TmuxRuntime, data: dict):

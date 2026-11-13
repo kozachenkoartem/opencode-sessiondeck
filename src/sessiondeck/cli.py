@@ -84,6 +84,7 @@ def main():
             result = start_session(registry, runtime, args.workspace, args.directory, args.session, args.title, args.reference_url)
             print(json.dumps({key: value for key, value in result.items() if key in {"id", "state", "deck_id", "error"}}))
         else:
+            registry.request_recovery()
             runtime.attach()
     except (DeckError, ValueError, OSError, sqlite3.Error) as exc:
         if not isinstance(exc, DeckError):

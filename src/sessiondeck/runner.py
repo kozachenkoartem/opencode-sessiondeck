@@ -87,11 +87,16 @@ def start_session(registry: Registry, runtime: TmuxRuntime, workspace: str, dire
     except OSError:
         raise DeckError("invalid_directory", "Project directory does not exist", 2) from None
     identity = runtime.ensure()
+    rebind_deck_id = None
+    if session_id and (existing := registry.logical_session(workspace, directory, session_id)):
+        claim = registry.claim_start(existing.deck_id, manual_resume=True)
+        registry.finish_claim(claim)
+        rebind_deck_id = existing.deck_id
     _assert_conversation_available(registry, runtime, directory, session_id, identity.socket_path)
     credential = registry.state.save_credential("opencode", secrets.token_urlsafe(32))
     attempt = registry.create_launch({"workspace": workspace, "directory": directory,
                                       "session_id": session_id, "title": title, "reference_url": reference_url,
-                                      "credential_ref": credential, "generation": identity.generation})
+                                       "credential_ref": credential, "generation": identity.generation, "rebind_deck_id": rebind_deck_id})
     try:
         pane = runtime.new_window(directory, [sys.executable, "-m", "sessiondeck", "_run", attempt["id"]])
         registry.update_launch(attempt["id"], pane_id=pane.pane_id)
@@ -215,7 +220,8 @@ def run_attempt(registry: Registry, runtime: TmuxRuntime, launch_id: str) -> int
             registration = Registration(attempt["workspace"], attempt["directory"], endpoint, conversation.id,
                                         pane.socket_path, pane.generation, pane.pane_id, attempt["title"] or "",
                                         attempt["reference_url"] or "", attempt["credential_ref"])
-            return await register_session(registry, runtime, registration)
+            return await register_session(registry, runtime, registration, native_runner=True,
+                                          rebind_deck_id=attempt.get("rebind_deck_id"))
 
         session = asyncio.run(prepare())
         held_lock, resume_lock = resume_lock, None

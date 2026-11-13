@@ -102,6 +102,22 @@ class ManagedSession:
     retired: bool
     created_at: float
     last_activity: float
+    native_runner: bool = True
+    restore_on_start: bool = True
+    lifecycle_revision: int = 0
+
+
+@dataclass(frozen=True)
+class LifecycleClaim:
+    token: str
+    deck_id: str
+    revision: int
+
+
+@dataclass(frozen=True)
+class UnloadGroup:
+    binding: PaneBinding
+    deck_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)

@@ -1,11 +1,37 @@
 import asyncio
+import json
 import os
 import re
 import secrets
 import signal
 import sys
 import tempfile
+import subprocess
 from pathlib import Path
+
+
+def sessions_for_directory(rows, directory):
+    target = str(Path(directory).expanduser().resolve())
+    sessions = []
+    for row in rows:
+        try:
+            if str(Path(row["directory"]).expanduser().resolve()) == target:
+                sessions.append({"id": row["id"], "title": row.get("title") or "Untitled", "updated": row.get("updated", 0)})
+        except (KeyError, TypeError, OSError):
+            continue
+    return sorted(sessions, key=lambda session: session["updated"], reverse=True)
+
+
+def list_sessions(directory):
+    try:
+        result = subprocess.run([os.environ.get("SESSIONDECK_OPENCODE", "opencode"), "session", "list", "--format", "json"],
+                                cwd=directory, text=True, capture_output=True, timeout=10, check=True)
+        rows = json.loads(result.stdout)
+        if not isinstance(rows, list):
+            raise ValueError
+        return sessions_for_directory(rows, directory)
+    except (OSError, subprocess.SubprocessError, ValueError, json.JSONDecodeError):
+        raise DeckError("session_list_failed", "Cannot read local OpenCode sessions") from None
 
 from .models import Conversation, DeckError, Endpoint
 from .opencode import OpenCodeClient
