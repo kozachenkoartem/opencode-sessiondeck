@@ -71,7 +71,7 @@ def _release_resume_lock(fd):
 
 
 def start_session(registry: Registry, runtime: TmuxRuntime, workspace: str, directory: str | None = None,
-                  session_id=None, title=None, reference_url=None) -> dict:
+                   session_id=None, title=None, reference_url=None, prompt=None, agent=None) -> dict:
     if sys.platform != "linux":
         raise DeckError("unsupported_platform", "Native launch currently requires Linux")
     if workspace not in {"work", "personal"}:
@@ -95,7 +95,7 @@ def start_session(registry: Registry, runtime: TmuxRuntime, workspace: str, dire
     _assert_conversation_available(registry, runtime, directory, session_id, identity.socket_path)
     credential = registry.state.save_credential("opencode", secrets.token_urlsafe(32))
     attempt = registry.create_launch({"workspace": workspace, "directory": directory,
-                                      "session_id": session_id, "title": title, "reference_url": reference_url,
+                                       "session_id": session_id, "title": title, "reference_url": reference_url, "prompt": prompt, "agent": agent,
                                        "credential_ref": credential, "generation": identity.generation, "rebind_deck_id": rebind_deck_id})
     try:
         pane = runtime.new_window(directory, [sys.executable, "-m", "sessiondeck", "_run", attempt["id"]])
@@ -217,6 +217,11 @@ def run_attempt(registry: Registry, runtime: TmuxRuntime, launch_id: str) -> int
                 await client.health()
                 conversation = (await client.get_session(attempt["directory"], attempt["session_id"]) if attempt["session_id"]
                                 else await client.create_session(attempt["directory"], attempt["title"]))
+                if attempt.get("prompt"):
+                    body = {"parts": [{"type": "text", "text": attempt["prompt"]}]}
+                    if attempt.get("agent"):
+                        body["agent"] = attempt["agent"]
+                    await client.request("POST", f"/session/{conversation.id}/prompt_async", directory=attempt["directory"], body=body)
             registration = Registration(attempt["workspace"], attempt["directory"], endpoint, conversation.id,
                                         pane.socket_path, pane.generation, pane.pane_id, attempt["title"] or "",
                                         attempt["reference_url"] or "", attempt["credential_ref"])

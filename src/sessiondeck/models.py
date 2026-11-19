@@ -21,6 +21,7 @@ class Conversation:
     directory: str
     title: str
     updated_ms: int
+    parent_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class PendingPermission:
 class PendingQuestion:
     request_id: str
     questions: tuple[str, ...]
+    session_id: str = ""
 
 
 @dataclass(frozen=True)

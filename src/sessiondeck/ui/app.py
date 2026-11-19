@@ -100,6 +100,7 @@ class SessionDeckApp(App):
         yield Footer()
 
     def on_mount(self):
+        self.on_resize()
         self.query_one(DataTable).focus()
         self.follow_sessions()
         self.recover_sessions()
@@ -253,11 +254,11 @@ class SessionDeckApp(App):
         if directory:
             self.push_screen(CreateSessionScreen(directory, workspace), self._create_selected)
         else:
-            self.push_screen(DirectoryScreen(), lambda selected: self._choose_new_directory(selected, workspace))
+            self.push_screen(self.directory_screen(), lambda selected: self._choose_new_directory(selected, workspace))
 
     def action_continue_session(self):
         if self.directory_key is None:
-            self.push_screen(DirectoryScreen(), self._choose_continue_directory)
+            self.push_screen(self.directory_screen(), self._choose_continue_directory)
             return
         self.choose_session(self.directory_key[1])
 
@@ -265,6 +266,13 @@ class SessionDeckApp(App):
         if directory:
             self.continue_directory = directory
             self.choose_session(directory)
+
+    def directory_screen(self):
+        sessions = self.registry.list(include_archived=True, include_retired=True)
+        directories = sorted({session.registration.directory for session in sessions},
+                             key=lambda directory: max(session.last_activity for session in sessions if session.registration.directory == directory),
+                             reverse=True)
+        return DirectoryScreen(directories)
 
     @work(group="continue", exit_on_error=False)
     async def choose_session(self, directory):

@@ -33,13 +33,15 @@ uv pip install -e '.[dev]'
 
 ```sh
 sessiondeck start --workspace work --directory ~/projects/app --title "Review changes"
+sessiondeck start --workspace work --directory ~/projects/app --title "Plan tests" --agent plan --prompt "Prepare an implementation plan."
 sessiondeck start --workspace personal --directory ~/projects/home
 sessiondeck
 ```
 
-`start` creates an OpenCode backend and TUI in a persistent tmux window. It does
-not send a prompt; select the session in the dashboard and enter your message
-in OpenCode. A project appears after its first session is registered.
+`start` creates an OpenCode backend and TUI in a persistent tmux window. Pass
+`--prompt` to begin work immediately; `--agent` selects the OpenCode agent for
+that prompt. Without `--prompt`, select the session in the dashboard and enter
+your message in OpenCode. A project appears after its first session is registered.
 
 **Layout-independent shortcut: `Ctrl+Space`.** From an agent it returns to the
 list; from the list it detaches your terminal. The agents keep working in both
@@ -83,7 +85,8 @@ restores the saved conversation, not an in-flight model request or tool process.
 `d` alone is a permission decision; `Ctrl+Space`, `Ctrl+Q`, and `Ctrl-b d`
 are handled by tmux. Questions are visible in the dashboard but answered inside
 OpenCode. At narrow widths, the table and details stack vertically and can be
-scrolled.
+scrolled. Pending permissions and questions from OpenCode subagents are shown
+on their root SessionDeck session.
 
 Cleanup rechecks that a session is completed; working and temporarily
 unreachable agents are retained.

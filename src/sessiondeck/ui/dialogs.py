@@ -3,7 +3,7 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Grid
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, DirectoryTree, Input, Label
+from textual.widgets import Button, DataTable, Input, Label
 
 
 class CreateSessionScreen(ModalScreen[tuple[str, str, str] | None]):
@@ -42,19 +42,41 @@ class CreateSessionScreen(ModalScreen[tuple[str, str, str] | None]):
 
 
 class DirectoryScreen(ModalScreen[str | None]):
+    def __init__(self, directories=()):
+        super().__init__()
+        self.directories = tuple(directories)
+
     def compose(self) -> ComposeResult:
         with Grid(id="dialog"):
-            yield Label("Project directory")
-            yield DirectoryTree(str(Path.home()), id="directories")
+            yield Label("Frequent directories")
+            yield DataTable(id="directories", cursor_type="row")
             yield Input(value=str(Path.home()), placeholder="Existing directory", id="directory")
             yield Button("Select", id="select", variant="success")
             yield Button("Cancel", id="cancel")
 
     def on_mount(self):
+        table = self.query_one("#directories", DataTable)
+        table.add_column("Directory")
+        for directory in self.directories:
+            table.add_row(self._display(directory), key=directory)
         self.query_one("#directory", Input).focus()
 
     def on_input_submitted(self, event: Input.Submitted):
         self._select(event.value)
+
+    def on_key(self, event):
+        if event.key != "tab":
+            return
+        value = self.query_one("#directory", Input).value
+        path = Path(value).expanduser()
+        parent, prefix = path.parent, path.name
+        try:
+            matches = sorted(item for item in parent.iterdir() if item.is_dir() and item.name.startswith(prefix))
+        except OSError:
+            return
+        if matches:
+            self.query_one("#directory", Input).value = str(matches[0])
+        event.stop()
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "select":
@@ -73,10 +95,16 @@ class DirectoryScreen(ModalScreen[str | None]):
             return
         self.dismiss(str(directory))
 
-    def on_tree_node_selected(self, event):
-        path = getattr(event.node.data, "path", None)
-        if path is not None and Path(path).is_dir():
-            self.query_one("#directory", Input).value = str(path)
+    def on_data_table_row_selected(self, event):
+        self.dismiss(event.row_key.value)
+
+    @staticmethod
+    def _display(directory):
+        home = Path.home()
+        try:
+            return "~" if Path(directory) == home else "~/" + str(Path(directory).relative_to(home))
+        except ValueError:
+            return directory
 
 
 class UnloadScreen(ModalScreen[bool]):

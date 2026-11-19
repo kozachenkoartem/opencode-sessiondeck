@@ -40,6 +40,9 @@ async def test_directory_navigation_and_small_terminal(monitor_setup):
     app = SessionDeckApp(monitor.registry, static, monitor.runtime)
     async with app.run_test(size=(40, 20)) as pilot:
         await pilot.pause()
+        assert app.has_class("narrow")
+        assert app.query_one("#body").styles.layout.name == "vertical"
+        assert app.query_one("#detail-pane").region.y > app.query_one("#sessions").region.y
         assert app.query_one(DataTable).row_count == 1
         await pilot.press("enter")
         await pilot.pause()

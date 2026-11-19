@@ -1,6 +1,5 @@
 import asyncio
 import time
-from dataclasses import replace
 from collections.abc import AsyncIterator
 
 from .models import (
@@ -114,9 +113,6 @@ class Monitor:
             while True:
                 wake.clear()
                 started = time.monotonic()
-                previous = self.snapshot.sessions.get(session.deck_id)
-                if previous is not None:
-                    await updates.put((session.deck_id, token, replace(previous, stale=True)))
                 view = await self._refresh_session(session)
                 await updates.put((session.deck_id, token, view))
                 await asyncio.sleep(max(0, MIN_REFRESH_SPACING - (time.monotonic() - started)))
@@ -186,8 +182,7 @@ class Monitor:
             return DecisionResult("failed", "Only once or reject is supported")
         async with self.decision_locks.setdefault(ref, asyncio.Lock()):
             candidates = [s for s in self.registry.list() if
-                          (s.registration.endpoint, s.api_directory, s.registration.opencode_session_id) ==
-                          (ref.endpoint, ref.directory, ref.session_id)]
+                           (s.registration.endpoint, s.api_directory) == (ref.endpoint, ref.directory)]
             if not candidates:
                 return DecisionResult("failed", "Request is no longer managed")
             audit_id = None
@@ -200,13 +195,13 @@ class Monitor:
                             continue
                         raise
                     if not pane.dead and pane.socket_path == session.binding.socket_path and pane.generation == session.binding.generation:
-                        break
+                        async with self.client_factory(session.registration) as client:
+                            current = await client.snapshot(ref.directory, session.registration.opencode_session_id)
+                        if ref in {permission.ref for permission in current.permissions}:
+                            break
                 else:
-                    return DecisionResult("failed", "No live agent pane owns this request")
+                    return DecisionResult("already_handled", "Request no longer pending")
                 async with self.client_factory(session.registration) as client:
-                    current = await client.snapshot(ref.directory, ref.session_id)
-                    if ref not in {permission.ref for permission in current.permissions}:
-                        return DecisionResult("already_handled", "Request no longer pending")
                     audit_id = self.registry.audit_attempt(ref, decision)
                     result = await client.reply(ref, decision)
                 outcome = "confirmed" if result else "failed"

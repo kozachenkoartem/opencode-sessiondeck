@@ -74,7 +74,10 @@ class OpenCodeClient:
         try:
             if not isinstance(info["id"], str) or not isinstance(info["directory"], str) or not isinstance(info["title"], str):
                 raise ValueError
-            return Conversation(info["id"], info["directory"], info["title"], int(info["time"]["updated"]))
+            parent = info.get("parentID")
+            if parent is not None and not isinstance(parent, str):
+                raise ValueError
+            return Conversation(info["id"], info["directory"], info["title"], int(info["time"]["updated"]), parent)
         except (KeyError, TypeError, ValueError):
             raise DeckError("invalid_response", "Invalid OpenCode conversation") from None
 
@@ -114,13 +117,30 @@ class OpenCodeClient:
                         or not isinstance(item["questions"], list)
                         or not all(isinstance(q["question"], str) for q in item["questions"])):
                     raise ValueError
-            pending = tuple(PendingPermission(
-                PermissionRef(self.endpoint, directory, session_id, item["id"]),
-                item["permission"], tuple(item["patterns"]),
-            ) for item in permissions if item["sessionID"] == session_id)
-            asking = tuple(PendingQuestion(item["id"], tuple(q["question"] for q in item["questions"]))
-                           for item in questions if item["sessionID"] == session_id)
-            return SessionSnapshot(session, execution["type"], pending, asking, time.time(), execution.get("message", ""))
+            ancestors = {session_id: session.parent_id}
+
+            async def belongs(owner):
+                seen = set()
+                while owner not in seen:
+                    if owner == session_id:
+                        return True
+                    seen.add(owner)
+                    if owner not in ancestors:
+                        ancestors[owner] = (await self.get_session(directory, owner)).parent_id
+                    owner = ancestors[owner]
+                    if owner is None:
+                        return False
+                raise DeckError("invalid_response", "OpenCode session ancestry contains a cycle")
+
+            pending, asking = [], []
+            for item in permissions:
+                if await belongs(item["sessionID"]):
+                    pending.append(PendingPermission(PermissionRef(self.endpoint, directory, item["sessionID"], item["id"]),
+                                                     item["permission"], tuple(item["patterns"])))
+            for item in questions:
+                if await belongs(item["sessionID"]):
+                    asking.append(PendingQuestion(item["id"], tuple(q["question"] for q in item["questions"]), item["sessionID"]))
+            return SessionSnapshot(session, execution["type"], tuple(pending), tuple(asking), time.time(), execution.get("message", ""))
         except (KeyError, TypeError, ValueError):
             raise DeckError("invalid_response", "Invalid OpenCode status/attention response") from None
 

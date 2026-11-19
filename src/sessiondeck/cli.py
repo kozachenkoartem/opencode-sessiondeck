@@ -41,6 +41,8 @@ def parser():
     start.add_argument("--session", help="Existing OpenCode conversation ID to resume")
     start.add_argument("--title")
     start.add_argument("--reference-url")
+    start.add_argument("--prompt")
+    start.add_argument("--agent")
     return root
 
 
@@ -81,7 +83,7 @@ def main():
             raise SystemExit(run_attempt(registry, runtime, args.launch_id))
         elif args.command == "start":
             from .runner import start_session
-            result = start_session(registry, runtime, args.workspace, args.directory, args.session, args.title, args.reference_url)
+            result = start_session(registry, runtime, args.workspace, args.directory, args.session, args.title, args.reference_url, args.prompt, args.agent)
             print(json.dumps({key: value for key, value in result.items() if key in {"id", "state", "deck_id", "error"}}))
         else:
             registry.request_recovery()
