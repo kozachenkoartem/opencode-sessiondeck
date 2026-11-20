@@ -77,7 +77,10 @@ class OpenCodeClient:
             parent = info.get("parentID")
             if parent is not None and not isinstance(parent, str):
                 raise ValueError
-            return Conversation(info["id"], info["directory"], info["title"], int(info["time"]["updated"]), parent)
+            agent = info.get("agent", "build")
+            if not isinstance(agent, str):
+                raise ValueError
+            return Conversation(info["id"], info["directory"], info["title"], int(info["time"]["updated"]), parent, agent)
         except (KeyError, TypeError, ValueError):
             raise DeckError("invalid_response", "Invalid OpenCode conversation") from None
 

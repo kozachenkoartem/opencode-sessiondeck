@@ -1,5 +1,6 @@
 import asyncio
 import time
+import re
 from collections.abc import AsyncIterator
 
 from .models import (
@@ -24,11 +25,12 @@ class Monitor:
         self.dirty = asyncio.Event()
         self.registry_refresh_requested = False
         self.decision_locks: dict[PermissionRef, asyncio.Lock] = {}
+        self.modes: dict[str, str] = {}
 
     def _client(self, registration):
         return OpenCodeClient(Endpoint(registration.endpoint), auth=self.registry.state.auth(registration.credential_ref))
 
-    async def _refresh_session(self, session: ManagedSession) -> SessionView:
+    async def _refresh_session(self, session: ManagedSession, refresh_mode=False) -> SessionView:
         session = self.registry.get(session.deck_id)
         title = self.registry.cached_title(session.deck_id) or session.registration.title
         activity = session.last_activity
@@ -41,6 +43,12 @@ class Monitor:
                 return SessionView(session, "stopped", title, activity, "Registered pane is no longer live")
             async with self.client_factory(session.registration) as client:
                 current = await client.snapshot(session.api_directory, session.registration.opencode_session_id)
+            mode = self.modes.get(session.deck_id, current.conversation.agent)
+            if refresh_mode:
+                pane_text = await asyncio.to_thread(self.runtime.pane_text, session.binding.pane_id)
+                matches = re.findall(r"(?:Plan|Build)\s*[·.]", pane_text)
+                mode = matches[-1].split()[0].lower() if matches else current.conversation.agent
+                self.modes[session.deck_id] = mode
             title = current.conversation.title or title
             activity = current.conversation.updated_ms / 1000
             await asyncio.to_thread(self.registry.cache, session.deck_id, title, activity)
@@ -57,7 +65,8 @@ class Monitor:
                 status, detail = "idle", "Ready for a message"
             if launch and launch["state"] == "tui_lost":
                 detail = "TUI disconnected — Enter to recover. " + detail
-            return SessionView(session, status, title, activity, detail, permissions=current.permissions, questions=current.questions)
+            return SessionView(session, status, title, activity, detail, permissions=current.permissions,
+                               questions=current.questions, mode=mode)
         except DeckError as exc:
             if exc.code in {"pane_missing", "stale_runtime", "session_missing"}:
                 return SessionView(session, "stopped", title, activity, str(exc))
@@ -65,7 +74,8 @@ class Monitor:
 
     async def refresh(self) -> DashboardSnapshot:
         sessions = self.registry.list()
-        views = await asyncio.gather(*(self._refresh_session(session) for session in sessions))
+        refresh_mode = await asyncio.to_thread(self.runtime.consume_mode_refresh)
+        views = await asyncio.gather(*(self._refresh_session(session, refresh_mode) for session in sessions))
         self.snapshot = DashboardSnapshot({view.session.deck_id: view for view in views})
         return self.snapshot
 
@@ -105,6 +115,7 @@ class Monitor:
         stream_credentials = {}
         updates = asyncio.Queue()
         values = dict(self.snapshot.sessions)
+        mode_refreshes = set()
         queue_waiter = asyncio.create_task(updates.get())
         dirty_waiter = asyncio.create_task(self.dirty.wait())
         next_scan = 0
@@ -113,7 +124,9 @@ class Monitor:
             while True:
                 wake.clear()
                 started = time.monotonic()
-                view = await self._refresh_session(session)
+                refresh_mode = session.deck_id in mode_refreshes
+                mode_refreshes.discard(session.deck_id)
+                view = await self._refresh_session(session, refresh_mode)
                 await updates.put((session.deck_id, token, view))
                 await asyncio.sleep(max(0, MIN_REFRESH_SPACING - (time.monotonic() - started)))
                 try:
@@ -154,6 +167,10 @@ class Monitor:
                     next_scan = now + REFRESH_INTERVAL
                     self.snapshot = DashboardSnapshot(dict(values))
                     yield self.snapshot
+                if await asyncio.to_thread(self.runtime.consume_mode_refresh):
+                    mode_refreshes.update(workers)
+                    for _, _, wake, _ in workers.values():
+                        wake.set()
                 done, _ = await asyncio.wait((queue_waiter, dirty_waiter), timeout=max(0, next_scan - time.monotonic()),
                                               return_when=asyncio.FIRST_COMPLETED)
                 if queue_waiter in done:

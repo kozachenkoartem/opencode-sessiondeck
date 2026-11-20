@@ -22,6 +22,7 @@ class Conversation:
     title: str
     updated_ms: int
     parent_id: str | None = None
+    agent: str = "build"
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,7 @@ class SessionView:
     stale: bool = False
     permissions: tuple[PendingPermission, ...] = ()
     questions: tuple[PendingQuestion, ...] = ()
+    mode: str = "build"
 
 
 @dataclass(frozen=True)

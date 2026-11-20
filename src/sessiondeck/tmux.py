@@ -62,6 +62,8 @@ class TmuxRuntime:
             self.command("bind-key", "-n", "C-q", "detach-client")
             self.command("bind-key", "-n", "C-Space", "if-shell", "-F", f"#{{==:#{{pane_id}},{dashboard}}}",
                          "detach-client", f"select-window -t {panes[dashboard].window_id}")
+            self.command("set-hook", "-g", "after-select-window",
+                         f'if-shell -F "#{{==:#{{pane_id}},{dashboard}}}" "set-option -s @sessiondeck_refresh_modes 1"')
             self.command("set-option", "-g", "status-right", "Ctrl-Space: back / detach")
             pane = self.panes()[dashboard]
             return RuntimeIdentity(pane.socket_path, pane.generation, pane.session_id, dashboard)
@@ -113,6 +115,24 @@ class TmuxRuntime:
     def show_dashboard(self):
         identity = self.ensure()
         self.focus(self.inspect(identity.dashboard_pane_id, identity.generation))
+
+    def pane_text(self, pane_id: str) -> str:
+        return self.command("capture-pane", "-p", "-t", pane_id).stdout
+
+    def consume_mode_refresh(self) -> bool:
+        requested = self.option("@sessiondeck_refresh_modes") == "1"
+        if requested:
+            self.command("set-option", "-s", "@sessiondeck_refresh_modes", "0")
+        return requested
+
+    def dashboard_active(self) -> bool:
+        dashboard = self.option("@sessiondeck_dashboard")
+        pane = self.panes().get(dashboard)
+        if pane is None:
+            return False
+        active = self.command("display-message", "-p", "-t", "main:", "#{window_id}").stdout.strip()
+        return active == pane.window_id
+
 
     def attach(self):
         identity = self.ensure()

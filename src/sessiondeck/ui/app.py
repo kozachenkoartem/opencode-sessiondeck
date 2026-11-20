@@ -77,7 +77,7 @@ class SessionDeckApp(App):
         self.busy_cleaning = False
         self.continue_directory = None
         self.show_completed = False
-        self.group_by_directory = True
+        self.group_by_directory = False
         self.columns_mode = None
 
     def compose(self) -> ComposeResult:
@@ -169,9 +169,7 @@ class SessionDeckApp(App):
                     continue
                 key = view.session.deck_id
                 self.row_sessions[key] = view
-                launch = self.registry.launch_for(view.session.deck_id)
-                mode = (launch.get("agent") or "build") if launch else "build"
-                values = [plain(f"{view.status} · {view.title}")] if narrow else [view.status, mode, plain(view.title), short_path(view.session.registration.directory), age(view.last_activity)]
+                values = [plain(f"{view.status} · {view.title}")] if narrow else [view.status, view.mode, plain(view.title), short_path(view.session.registration.directory), age(view.last_activity)]
                 table.add_row(*(Text(v) for v in values), key=key)
             breadcrumb = (f"{self.directory_key[0]} / {short_path(self.directory_key[1])}" if self.directory_key is not None
                           else f"{self.workspace} / flat")

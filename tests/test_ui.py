@@ -38,6 +38,7 @@ async def test_directory_navigation_and_small_terminal(monitor_setup):
     snapshot = await monitor.refresh()
     static = StaticMonitor(snapshot)
     app = SessionDeckApp(monitor.registry, static, monitor.runtime)
+    app.group_by_directory = True
     async with app.run_test(size=(40, 20)) as pilot:
         await pilot.pause()
         assert app.has_class("narrow")
@@ -81,6 +82,7 @@ async def test_project_selection_survives_insert(monitor_setup):
     monitor, _, session = monitor_setup
     snapshot = await monitor.refresh()
     app = SessionDeckApp(monitor.registry, StaticMonitor(snapshot), monitor.runtime)
+    app.group_by_directory = True
     async with app.run_test() as pilot:
         await pilot.pause()
         selected_group = app.row_projects[app.current_key()]
@@ -95,6 +97,7 @@ async def test_retry_counts_as_project_attention(monitor_setup):
     monitor, client, session = monitor_setup
     client.current = replace(client.current, execution="retry", retry_message="rate limited")
     app = SessionDeckApp(monitor.registry, StaticMonitor(await monitor.refresh()), monitor.runtime)
+    app.group_by_directory = True
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.query_one(DataTable).get_row_at(0)[-1].plain == "1"

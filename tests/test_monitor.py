@@ -64,6 +64,13 @@ class FakeRuntime:
     def focus(self, pane):
         self.focused.append(pane)
 
+    def pane_text(self, _):
+        return ""
+
+    def consume_mode_refresh(self):
+        return False
+
+
 
 @pytest.fixture
 def monitor_setup(tmp_path):
@@ -89,6 +96,13 @@ async def test_question_retry_activity_and_outage(monitor_setup):
     client.error = DeckError("unreachable", "offline")
     view = (await monitor.refresh()).sessions[session.deck_id]
     assert view.status == "unreachable" and view.stale
+
+
+async def test_mode_uses_current_tui_indicator(monitor_setup):
+    monitor, _, session = monitor_setup
+    monitor.runtime.pane_text = lambda _: "Build · old response\nPlan · current input"
+    monitor.runtime.consume_mode_refresh = lambda: True
+    assert (await monitor.refresh()).sessions[session.deck_id].mode == "plan"
 
 
 def pending(client, session):
