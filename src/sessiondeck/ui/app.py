@@ -47,15 +47,12 @@ class SessionDeckApp(App):
     CSS = """
     #workspaces { height: 3; }
     #breadcrumb, #hint { height: auto; padding: 0 1; }
-    #body { height: 1fr; }
-    #sessions { width: 3fr; height: 1fr; }
-    #detail-pane { width: 2fr; padding: 1; overflow-y: auto; }
+    #body { height: 1fr; layout: vertical; }
+    #sessions { width: 1fr; height: 2fr; }
+    #detail-pane { width: 1fr; height: 1fr; padding: 0 1; overflow-y: auto; }
     #details { height: auto; }
     #decisions { height: auto; }
     #decisions Button { min-width: 8; width: 1fr; }
-    .narrow #body { layout: vertical; }
-    .narrow #sessions { width: 1fr; height: 2fr; }
-    .narrow #detail-pane { width: 1fr; height: 1fr; padding: 0 1; }
     .narrow #workspaces Button { min-width: 8; width: 1fr; }
     """
     BINDINGS = [("1", "workspace('work')", "Work"), ("2", "workspace('personal')", "Personal"),
@@ -151,7 +148,7 @@ class SessionDeckApp(App):
             if self.directory_key is None and self.group_by_directory:
                 table.add_columns(*(["Project", "Attention"] if narrow else ["Workspace", "Project directory", "Sessions", "Attention"]))
             else:
-                table.add_columns(*(["State · Session"] if narrow else ["Status", "Session", "Directory", "Activity"]))
+                table.add_columns(*(["State · Session"] if narrow else ["Status", "Mode", "Session", "Directory", "Activity"]))
         self.row_projects, self.row_sessions = {}, {}
         if self.directory_key is None and self.group_by_directory:
             groups = {}
@@ -172,7 +169,9 @@ class SessionDeckApp(App):
                     continue
                 key = view.session.deck_id
                 self.row_sessions[key] = view
-                values = [plain(f"{view.status} · {view.title}")] if narrow else [view.status, plain(view.title), short_path(view.session.registration.directory), age(view.last_activity)]
+                launch = self.registry.launch_for(view.session.deck_id)
+                mode = (launch.get("agent") or "build") if launch else "build"
+                values = [plain(f"{view.status} · {view.title}")] if narrow else [view.status, mode, plain(view.title), short_path(view.session.registration.directory), age(view.last_activity)]
                 table.add_row(*(Text(v) for v in values), key=key)
             breadcrumb = (f"{self.directory_key[0]} / {short_path(self.directory_key[1])}" if self.directory_key is not None
                           else f"{self.workspace} / flat")
