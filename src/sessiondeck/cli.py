@@ -26,6 +26,9 @@ def parser():
     v1 = api.add_parser("v1").add_subparsers(dest="action", required=True)
     for action in ("runtime", "register"):
         v1.add_parser(action)
+    prompt = v1.add_parser("prompt")
+    prompt.add_argument("session_id")
+    prompt.add_argument("--text", required=True)
     listing = v1.add_parser("list")
     listing.add_argument("--workspace", choices=["work", "personal", "all"], default="all")
     listing.add_argument("--directory")
@@ -68,6 +71,9 @@ def main():
                 data = asdict(asyncio.run(register_input(registry, runtime, value)))
             elif args.action == "list":
                 data = [asdict(item) for item in registry.list(args.workspace, args.directory, args.include_archived)]
+            elif args.action == "prompt":
+                from .prompt import send_prompt
+                data = asyncio.run(send_prompt(registry, runtime, args.session_id, args.text))
             else:
                 if args.action == "unregister":
                     registry.unregister(args.deck_id)

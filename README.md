@@ -61,6 +61,24 @@ sessiondeck start --workspace work --session SESSION_ID
 Let the old agent finish and exit its original instance before resuming. This
 restores the saved conversation, not an in-flight model request or tool process.
 
+## Event Integration
+
+Deliver an external event to a live managed OpenCode conversation:
+
+```sh
+sessiondeck api v1 prompt SESSION_ID --text 'GitLab: reviewer requested changes: https://gitlab.example/MR/1'
+```
+
+The command uses OpenCode's normal message queue: a busy agent receives the
+message after its current response stops. It never switches tmux windows or
+interrupts work. Success returns JSON with `state: "queued"`, the managed
+SessionDeck ID, and the OpenCode session ID.
+
+The command returns a JSON error and non-zero exit status when the conversation
+is not managed, its pane is stopped, or its backend is unavailable. Event
+handlers should treat that result as a notification to the user rather than
+attempting to create or resume a session automatically.
+
 ## Navigation
 
 | Key | Action |
