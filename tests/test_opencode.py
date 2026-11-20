@@ -54,6 +54,15 @@ async def test_reply_is_once_or_reject(decision):
             await client.reply(ref, "always")
 
 
+async def test_prompt_accepts_no_content_response():
+    def handler(request):
+        assert request.url.path == "/session/ses_test/prompt_async"
+        assert json.loads(request.content) == {"agent": "plan", "parts": [{"type": "text", "text": "Plan it"}]}
+        return httpx.Response(204)
+    async with client_for(handler) as client:
+        await client.prompt("/tmp", "ses_test", "Plan it", "plan")
+
+
 async def test_sse_comments_multiline_and_bad_frames():
     async def lines():
         for line in [": ping", "data: {", 'data: "type":"question.asked",', 'data: "properties":{"text":"вопрос"}}', "", "data: invalid", "", 'data: {"type":"future"}', ""]:

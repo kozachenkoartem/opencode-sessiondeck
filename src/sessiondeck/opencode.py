@@ -88,6 +88,21 @@ class OpenCodeClient:
         return self.conversation(await self.request("POST", "/session", directory=directory,
                                                     body={"title": title} if title else {}))
 
+    async def prompt(self, directory: str, session_id: str, text: str, agent: str | None = None):
+        body = {"parts": [{"type": "text", "text": text}]}
+        if agent:
+            body["agent"] = agent
+        try:
+            response = await self.http.post(f"/session/{session_id}/prompt_async", params={"directory": directory}, json=body)
+            if response.status_code == 404:
+                raise DeckError("not_found", "OpenCode resource no longer exists")
+            if response.status_code in {401, 403}:
+                raise DeckError("unauthorized", "OpenCode authentication failed")
+            if response.status_code != 204:
+                raise DeckError("api_error", f"OpenCode returned HTTP {response.status_code}")
+        except httpx.HTTPError:
+            raise DeckError("unreachable", "OpenCode request failed or timed out") from None
+
     async def snapshot(self, directory: str, session_id: str) -> SessionSnapshot:
         await self.health()
         try:

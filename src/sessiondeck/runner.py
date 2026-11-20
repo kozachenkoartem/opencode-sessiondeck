@@ -218,10 +218,7 @@ def run_attempt(registry: Registry, runtime: TmuxRuntime, launch_id: str) -> int
                 conversation = (await client.get_session(attempt["directory"], attempt["session_id"]) if attempt["session_id"]
                                 else await client.create_session(attempt["directory"], attempt["title"]))
                 if attempt.get("prompt"):
-                    body = {"parts": [{"type": "text", "text": attempt["prompt"]}]}
-                    if attempt.get("agent"):
-                        body["agent"] = attempt["agent"]
-                    await client.request("POST", f"/session/{conversation.id}/prompt_async", directory=attempt["directory"], body=body)
+                    await client.prompt(attempt["directory"], conversation.id, attempt["prompt"], attempt.get("agent"))
             registration = Registration(attempt["workspace"], attempt["directory"], endpoint, conversation.id,
                                         pane.socket_path, pane.generation, pane.pane_id, attempt["title"] or "",
                                         attempt["reference_url"] or "", attempt["credential_ref"])
